@@ -1,0 +1,38 @@
+{
+  "name": "oddline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:server": "tsx watch server/server.ts",
+    "build": "tsc --noEmit && tsc -p tsconfig.server.json && vite build",
+    "start": "node dist-server/server.js",
+    "test": "tsx --test server/odds-api.test.ts server/app.test.ts server/generator.test.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "pg": "^8.16.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.6",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "pg-mem": "^3.0.14",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build",
+  "functions": {
+    "app.ts": {
+      "includeFiles": [
+        "dist/**",
+        "server/migrations/**"
+      ]
+    }
+  }
+}
