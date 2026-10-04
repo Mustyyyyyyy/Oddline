@@ -2,10 +2,7 @@
   "buildCommand": "npm run build",
   "functions": {
     "app.ts": {
-      "includeFiles": [
-        "dist/**",
-        "server/migrations/**"
-      ]
+      "includeFiles": "{dist/**,server/migrations/**}"
     }
   }
 }
