@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "types": ["vite/client", "node"],
-  "include": ["app.ts", "src", "vite.config.ts"]
+  "include": ["api/**/*.ts", "src", "vercel-app.ts", "vite.config.ts"]
 }

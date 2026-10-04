@@ -10,6 +10,7 @@
     "dev": "vite --host 0.0.0.0",
     "dev:server": "tsx watch server/server.ts",
     "build": "tsc --noEmit && tsc -p tsconfig.server.json && vite build",
+    "build:vercel": "node scripts/build-vercel.mjs",
     "start": "node dist-server/server.js",
     "test": "tsx --test server/odds-api.test.ts server/app.test.ts server/generator.test.ts"
   },

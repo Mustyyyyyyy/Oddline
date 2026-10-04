@@ -45,9 +45,9 @@ The container runs Node as a non-root user; Docker Compose provides persistent P
 
 ## Vercel deployment
 
-The root `app.ts` default-exports the Express application for Vercel's Node.js runtime, where Vercel detects it as the single serverless Express app; do not add a `functions` pattern for this root entrypoint. `vercel.json` sets `dist` as the static output directory for the Vite frontend, while Express handles the API routes on the same origin. Database migrations are tracked and protected by a database lock, so concurrent serverless cold starts do not reapply schema changes. The serverless PostgreSQL pool defaults to three connections per warm instance.
+Vercel serves the Vite frontend from its static CDN and routes `/api/*` through the catch-all `api/[...route].ts` function into the Express app in `vercel-app.ts`. The Vercel build command publishes the Vite build into `public/` for CDN delivery; the function config explicitly bundles the SQL migrations needed during cold-start initialization. Database migrations are tracked and protected by a database lock, so concurrent serverless cold starts do not reapply schema changes. The serverless PostgreSQL pool defaults to three connections per warm instance.
 
-1. Push this project to a Git provider and import that repository in Vercel. Use the Express framework preset, Node.js 20 or newer, and `npm run build` as the build command. The output directory is configured as `dist` in `vercel.json`.
+1. Push this project to a Git provider and import that repository in Vercel. Use the Other framework preset, Node.js 20 or newer, and `npm run build:vercel` as the build command. Leave the output directory unset so `/api/*` requests reach the serverless function.
 2. Provision hosted PostgreSQL separately. Use its pooled connection URL for `DATABASE_URL`; the deployment filesystem is not persistent and must not be used for the database. Enable `DATABASE_SSL=true` only when required by the database provider.
 3. Add these Vercel environment variables for Production (and Preview if you want preview deployments to use live data):
    - `DATABASE_URL` — pooled PostgreSQL connection string.

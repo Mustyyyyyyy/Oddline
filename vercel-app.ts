@@ -1,5 +1,4 @@
 import "dotenv/config";
-import { resolve } from "node:path";
 import { createApp, type OddsFeed } from "./server/app.js";
 import { createDatabase, migrate } from "./server/db.js";
 import { ProviderError } from "./server/errors.js";
@@ -38,7 +37,6 @@ const app = createApp({
   database,
   feed,
   ready,
-  staticDirectory: resolve(process.cwd(), "dist"),
 });
 
 export default app;
