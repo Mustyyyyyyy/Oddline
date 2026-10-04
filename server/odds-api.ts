@@ -165,8 +165,11 @@ export class TheOddsApiFeed {
       throw new ProviderError(`The Odds API ${reason}.`);
     }
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new ProviderError(`The Odds API rejected the configured key (HTTP ${response.status}). Verify ODDS_API_KEY and your subscription.`);
+      if (response.status === 401) {
+        throw new ProviderError("The Odds API rejected ODDS_API_KEY (HTTP 401). Use an active API key from your account, without quotes or extra spaces, and redeploy.");
+      }
+      if (response.status === 403) {
+        throw new ProviderError("The Odds API denied access (HTTP 403). Check your account permissions and subscription access for the requested markets.");
       }
       if (response.status === 429) {
         throw new ProviderError("The Odds API request limit was reached. Check your remaining monthly credits and plan.");

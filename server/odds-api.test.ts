@@ -154,7 +154,16 @@ test("reports rejected API keys and quota exhaustion without substituting data",
     daysAhead: 13,
   }, async () => new Response("unauthorized", { status: 401 }));
   await assert.rejects(feed.getFixtures(true), (error: unknown) =>
-    error instanceof ProviderError && /ODDS_API_KEY/.test(error.message));
+    error instanceof ProviderError && /HTTP 401/.test(error.message) && /without quotes or extra spaces/.test(error.message));
+
+  const forbidden = new TheOddsApiFeed({
+    apiKey: "private-test-key",
+    sportKeys: ["basketball_nba"],
+    region: "us",
+    daysAhead: 13,
+  }, async () => new Response("forbidden", { status: 403 }));
+  await assert.rejects(forbidden.getFixtures(true), (error: unknown) =>
+    error instanceof ProviderError && /HTTP 403/.test(error.message) && /permissions and subscription/.test(error.message));
 
   const invalidRequest = new TheOddsApiFeed({
     apiKey: "private-test-key",
