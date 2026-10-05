@@ -143,6 +143,7 @@ function App(): React.JSX.Element {
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loadError, setLoadError] = useState("");
+  const [providerWarnings, setProviderWarnings] = useState<string[]>([]);
   const [feedWarning, setFeedWarning] = useState("");
   const [historyError, setHistoryError] = useState("");
   const [feedConnected, setFeedConnected] = useState(false);
@@ -161,11 +162,13 @@ function App(): React.JSX.Element {
     setLoadingFixtures(true);
     setLoadError("");
     try {
-      const result = await api<{ fixtures: Fixture[] }>(`/api/fixtures${force ? "?refresh=1" : ""}`);
+      const result = await api<{ fixtures: Fixture[]; warnings?: string[] }>(`/api/fixtures${force ? "?refresh=1" : ""}`);
       setFixtures(result.fixtures);
+      setProviderWarnings(result.warnings ?? []);
       setFeedConnected(true);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Could not load fixtures.");
+      setProviderWarnings([]);
       setFixtures([]);
       setFeedConnected(false);
     } finally {
@@ -329,6 +332,7 @@ function App(): React.JSX.Element {
             </div>
             <FixtureFilters sport={sportFilter} onSportChange={setSportFilter} search={search} onSearchChange={setSearch} />
             {loadError && <div className="feed-stale-notice">{loadError}</div>}
+            {providerWarnings.map((warning) => <div className="feed-stale-notice" key={warning}>{warning}</div>)}
             <div className="fixture-grid">
               {loadingFixtures && !fixtures.length ? <div className="loading-card">Loading current fixtures…</div>
                 : matchingUpcoming.length ? matchingUpcoming.slice(0, 6).map((fixture) => <FixtureCard key={fixture.id} fixture={fixture} />)
@@ -369,6 +373,7 @@ function App(): React.JSX.Element {
                 <div className="period-hint">{generationPeriod === "daily" ? "Today only · combined odds capped at 50.00" : "Upcoming Friday through Sunday · combined odds capped at 200.00"}</div>
                 {generationError && <div className="feed-stale-notice" role="alert">{generationError}</div>}
                 {loadError && !feedConnected && <div className="feed-stale-notice">{loadError}</div>}
+                {providerWarnings.map((warning) => <div className="feed-stale-notice" key={warning}>{warning}</div>)}
                 <div className="strategy-note">One pick per game, balanced across leagues and available markets. Totals and spreads are included where listed; this feed does not provide corners, shots, or fouls. These odds are not predictions.</div>
                 <button className="button button-primary button-wide" type="submit" disabled={generatingSlip || loadingFixtures}>
                   {generatingSlip ? "Building from current markets…" : <>Generate selections <span>→</span></>}
@@ -404,6 +409,7 @@ function App(): React.JSX.Element {
               <button className="button button-secondary" onClick={() => { void loadHistory(); void loadFixtures(true); }} disabled={loadingHistory}>↻ Refresh</button>
             </div>
             {feedWarning && <div className="feed-stale-notice">{feedWarning}</div>}
+            {providerWarnings.map((warning) => <div className="feed-stale-notice" key={warning}>{warning}</div>)}
             {historyError && <div className="feed-stale-notice">{historyError}</div>}
             <div className="history-summary">
               {tickets.length > 0 && <>

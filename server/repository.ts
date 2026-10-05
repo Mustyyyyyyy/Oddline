@@ -144,7 +144,29 @@ export async function listFixtures(database: Database): Promise<Fixture[]> {
       oddsUpdatedAt: new Date(row.updated_at).toISOString(),
     });
   }
+
   return result;
+}
+
+export async function listTrackedFixtures(database: Database): Promise<Fixture[]> {
+  const { rows } = await database.query<FixtureRow>(
+    `SELECT DISTINCT f.id, f.source, f.sport, f.home_team, f.away_team, f.league, f.starts_at, f.status, f.updated_at
+     FROM fixtures f
+     JOIN ticket_selections ts ON ts.fixture_id = f.id
+     ORDER BY f.starts_at`,
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    sport: row.sport,
+    homeTeam: row.home_team,
+    awayTeam: row.away_team,
+    league: row.league,
+    startsAt: new Date(row.starts_at).toISOString(),
+    status: row.status,
+    selections: [],
+    source: row.source,
+    oddsUpdatedAt: new Date(row.updated_at).toISOString(),
+  }));
 }
 
 function mapMarket(row: MarketRow): MarketSelection {

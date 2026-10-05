@@ -9,7 +9,6 @@ const defaultSportKeys = [
   "soccer_usa_mls",
   "soccer_uefa_champs_league",
   "basketball_nba",
-  "basketball_euroleague",
 ];
 
 interface OddsApiConfig {

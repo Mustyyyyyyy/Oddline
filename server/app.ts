@@ -5,13 +5,14 @@ import { z } from "zod";
 import { ProviderError } from "./errors.js";
 import { isSupportedTimeZone } from "./generation-window.js";
 import { generateSlip } from "./generator.js";
-import { databaseIsReady, listFixtures, listHistory, saveTicket, syncFixtureStatuses, syncFixtures } from "./repository.js";
+import { databaseIsReady, listFixtures, listHistory, listTrackedFixtures, saveTicket, syncFixtureStatuses, syncFixtures } from "./repository.js";
 import type { Fixture, Database } from "./types.js";
 
 export interface OddsFeed {
   source?: string;
   getFixtures(forceRefresh?: boolean): Promise<Fixture[]>;
-  getStatuses?(forceRefresh?: boolean): Promise<Fixture[]>;
+  getStatuses?(trackedFixtures?: Fixture[]): Promise<Fixture[]>;
+  getWarnings?(): string[];
 }
 
 const generationRequest = z.object({
@@ -57,14 +58,19 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
   app.get("/api/fixtures", asyncRoute(async (request, response) => {
     const fixtures = await feed.getFixtures(request.query.refresh === "1");
     await syncFixtures(database, fixtures);
-    response.json({ fixtures: await listFixtures(database), source: provider });
+    response.json({
+      fixtures: await listFixtures(database),
+      source: provider,
+      warnings: feed.getWarnings?.() ?? [],
+    });
   }));
 
   app.get("/api/history", asyncRoute(async (_request, response) => {
     let providerStale = false;
     try {
       if (feed.getStatuses) {
-        await syncFixtureStatuses(database, await feed.getStatuses());
+        const trackedFixtures = await listTrackedFixtures(database);
+        await syncFixtureStatuses(database, await feed.getStatuses(trackedFixtures));
       } else {
         const fixtures = await feed.getFixtures();
         await syncFixtures(database, fixtures);
@@ -158,7 +164,8 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
       ok: true,
       database: "available",
       provider: process.env.ODDS_API_KEY ? "configured" : "not-configured",
-      providerName: "The Odds API",
+      scheduleProvider: process.env.API_SPORTS_KEY ? "configured" : "not-configured",
+      providerName: "API-Sports schedules + The Odds API prices",
     });
   }));
 
