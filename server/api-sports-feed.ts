@@ -10,7 +10,7 @@ const apiResponseSchema = z.object({
   errors: z.union([z.array(z.unknown()), z.record(z.string(), z.unknown())]).optional(),
   paging: z.object({ current: z.number().optional(), total: z.number().optional() }).optional(),
 });
-const maxOddsPagesPerDate = 25;
+const maxOddsPagesPerDate = 3;
 
 interface ApiFootballFixture {
   fixture?: { id?: unknown; date?: unknown; status?: { short?: unknown; long?: unknown } };
@@ -49,6 +49,7 @@ export class ApiSportsFootballFeed implements OddsFeed {
   private fixturesRefresh?: Promise<Fixture[]>;
   private readonly dateCache = new Map<string, { expiresAt: number; fixtures: Fixture[] }>();
   private readonly dateRefreshes = new Map<string, Promise<Fixture[]>>();
+  private readonly oddsTruncatedDates = new Set<string>();
   private warnings = [
     "NBA is unavailable: the configured API-Sports plan cannot access the current season, and NBA bookmaker odds are not available from the current API-Sports NBA endpoint.",
   ];
@@ -101,6 +102,7 @@ export class ApiSportsFootballFeed implements OddsFeed {
 
   private async fetchFixtureRange(): Promise<Fixture[]> {
     const dates = dateRange(this.now(), this.config.daysAhead);
+    this.oddsTruncatedDates.clear();
     const results = await mapConcurrent(dates, 2, async (date) => {
       try {
         const [schedules, odds] = await Promise.all([
@@ -138,6 +140,11 @@ export class ApiSportsFootballFeed implements OddsFeed {
         `Football fixtures or odds could not be loaded for ${failures.length} of ${dates.length} dates (including ${first.date}): ${providerErrorMessage(first.error)}`,
       );
     }
+    if (this.oddsTruncatedDates.size) {
+      this.warnings.push(
+        `API-Sports returned more than ${maxOddsPagesPerDate} odds pages for ${this.oddsTruncatedDates.size} date(s); loaded the first ${maxOddsPagesPerDate} pages to stay within the Free plan limit.`,
+      );
+    }
     if (!fixtures.length && failures.length === dates.length) {
       throw new ProviderError(`API-Sports Football feed is unavailable. ${this.warnings[1]}`);
     }
@@ -166,11 +173,10 @@ export class ApiSportsFootballFeed implements OddsFeed {
   private async getDateOdds(date: string): Promise<unknown[]> {
     const firstPage = await this.requestJson(`/odds?${new URLSearchParams({ date, page: "1" })}`);
     const totalPages = firstPage.paging?.total ?? 1;
-    if (totalPages > maxOddsPagesPerDate) {
-      throw new ProviderError(`API-Sports returned ${totalPages} odds pages for ${date}; refusing to exceed the ${maxOddsPagesPerDate}-page safety limit.`);
-    }
+    if (totalPages > maxOddsPagesPerDate) this.oddsTruncatedDates.add(date);
+    const pagesToLoad = Math.min(totalPages, maxOddsPagesPerDate);
     const pages = await mapConcurrent(
-      Array.from({ length: totalPages - 1 }, (_, index) => index + 2),
+      Array.from({ length: pagesToLoad - 1 }, (_, index) => index + 2),
       2,
       (page) => this.requestJson(`/odds?${new URLSearchParams({ date, page: String(page) })}`),
     );

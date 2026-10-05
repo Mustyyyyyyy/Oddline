@@ -113,6 +113,58 @@ test("loads API-Sports Football fixtures and every odds page, matched by provide
   assert.ok(feed.getWarnings().some((warning) => warning.startsWith("NBA is unavailable:")));
 });
 
+test("respects API-Sports Free plan three-page limit and keeps odds from accessible pages", async () => {
+  const oddsPages = new Map<string, number[]>();
+  const feed = new ApiSportsFootballFeed(
+    { apiKey: "private-test-key", daysAhead: 1 },
+    async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/fixtures")) {
+        return Response.json({
+          response: [700, 701, 702].map((id) => ({
+            fixture: { id, date: "2026-10-05T18:00:00Z", status: { short: "NS" } },
+            teams: { home: { name: `Home ${id}` }, away: { name: `Away ${id}` } },
+            league: { name: "Premier League" },
+          })),
+          errors: [],
+        });
+      }
+      const page = Number(url.searchParams.get("page"));
+      const date = url.searchParams.get("date")!;
+      const pages = oddsPages.get(date) ?? [];
+      pages.push(page);
+      oddsPages.set(date, pages);
+      return Response.json({
+        response: [{
+          fixture: { id: 699 + page },
+          bookmakers: [{
+            name: "Provider Book",
+            bets: [{ name: "Match Winner", values: [
+              { value: "Home", odd: "2.0" },
+              { value: "Draw", odd: "3.0" },
+              { value: "Away", odd: "4.0" },
+            ] }],
+          }],
+        }],
+        paging: { current: page, total: 8 },
+        errors: [],
+      });
+    },
+    () => now,
+    3600,
+  );
+
+  const fixtures = await feed.getFixtures();
+  assert.ok(oddsPages.size >= 1);
+  for (const pages of oddsPages.values()) assert.deepEqual(pages.sort(), [1, 2, 3]);
+  assert.deepEqual(fixtures.map(({ id }) => id), [
+    "api-sports:football:700",
+    "api-sports:football:701",
+    "api-sports:football:702",
+  ]);
+  assert.ok(feed.getWarnings().some((warning) => warning.includes("first 3 pages")));
+});
+
 test("refreshes recent saved Football statuses independently of odds", async () => {
   const feed = new ApiSportsFootballFeed(
     { apiKey: "private-test-key", daysAhead: 1 },
