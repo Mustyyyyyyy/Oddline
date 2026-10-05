@@ -69,9 +69,15 @@ test("API reads real-feed-shaped fixtures, saves selected prices and tracks prov
       },
     ],
   };
+  let providerOffline = false;
+  let fixtureRequests = 0;
   const feed = {
     source: "the-odds-api",
-    getFixtures: async () => [fixture],
+    getFixtures: async () => {
+      fixtureRequests += 1;
+      if (providerOffline) throw new ProviderError("Provider request quota was reached.");
+      return [fixture];
+    },
     getStatuses: async () => [{ ...fixture, selections: [] }],
   };
   const staticDirectory = resolve(process.cwd(), "dist");
@@ -128,9 +134,51 @@ test("API reads real-feed-shaped fixtures, saves selected prices and tracks prov
     assert.equal(preview.targetReached, false);
     assert.equal(preview.period, "daily");
     assert.equal(preview.picks[0]?.fixture.startsAt.slice(0, 10), preview.window.startsAt.slice(0, 10));
+    assert.equal(fixtureRequests, 1, "generation reuses the shared recent provider snapshot");
     const previewHistoryResponse = await fetch(`${baseUrl}/api/history`);
     const previewHistory = await previewHistoryResponse.json() as { tickets: unknown[] };
     assert.equal(previewHistory.tickets.length, 0, "a preview must not save history before confirmation");
+
+    providerOffline = true;
+    const cachedFixturesResponse = await fetch(`${baseUrl}/api/fixtures?refresh=1`);
+    const cachedFixtures = await cachedFixturesResponse.json() as {
+      fixtures: Fixture[];
+      stale: boolean;
+      warnings: string[];
+    };
+    assert.equal(cachedFixturesResponse.status, 200);
+    assert.equal(cachedFixtures.stale, true);
+    assert.equal(cachedFixtures.fixtures.length, 1);
+    assert.ok(cachedFixtures.warnings.some((warning) => warning.includes("preview only")));
+
+    await database.query("UPDATE market_selections SET updated_at = $1", [new Date(Date.now() - 7 * 60 * 60 * 1000)]);
+    const cachedPreviewResponse = await fetch(`${baseUrl}/api/generate-selections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetOdds: 5, sport: "football", period: "daily", timeZone: "UTC" }),
+    });
+    const cachedPreview = await cachedPreviewResponse.json() as {
+      picks: Array<{ fixture: Fixture }>;
+      stale: boolean;
+      warning: string;
+    };
+    assert.equal(cachedPreviewResponse.status, 200);
+    assert.equal(cachedPreview.stale, true);
+    assert.equal(cachedPreview.picks.length, 1);
+    assert.match(cachedPreview.warning, /saving is disabled/i);
+    const staleSaveResponse = await fetch(`${baseUrl}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetOdds: 5,
+        selections: [`${fixture.id}|${fixture.selections[0]!.id}`],
+        period: "daily",
+        sport: "football",
+        timeZone: "UTC",
+      }),
+    });
+    assert.equal(staleSaveResponse.status, 503, "stale selections must not be saved as live prices");
+    providerOffline = false;
 
     const homeMarket = fixture.selections.find((selection) => selection.selection === "home");
     assert.ok(homeMarket);
@@ -203,6 +251,11 @@ test("API reads real-feed-shaped fixtures, saves selected prices and tracks prov
     assert.equal(finishedTicket?.period, "daily");
     const savedTotalsTicket = history.tickets.find((ticket) => ticket.selections[0]?.market === "totals:2.5");
     assert.equal(savedTotalsTicket?.selections[0]?.selection, "over");
+
+    providerOffline = true;
+    await database.query("UPDATE market_selections SET updated_at = $1", [new Date(Date.now() - 25 * 60 * 60 * 1000)]);
+    const expiredCacheResponse = await fetch(`${baseUrl}/api/fixtures?refresh=1`);
+    assert.equal(expiredCacheResponse.status, 503, "prices older than 24 hours must not be offered as a preview");
   } finally {
     server.close();
     await once(server, "close");

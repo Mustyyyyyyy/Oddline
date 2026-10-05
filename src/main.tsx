@@ -59,6 +59,8 @@ interface GeneratedSlip {
   method: string;
   period: GenerationPeriod;
   window: { startsAt: string; endsAt: string };
+  stale?: boolean;
+  warning?: string;
 }
 
 interface ApiError {
@@ -160,6 +162,7 @@ function App(): React.JSX.Element {
   const [feedWarning, setFeedWarning] = useState("");
   const [historyError, setHistoryError] = useState("");
   const [feedConnected, setFeedConnected] = useState(false);
+  const [feedStale, setFeedStale] = useState(false);
   const [loadingFixtures, setLoadingFixtures] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [generatingSlip, setGeneratingSlip] = useState(false);
@@ -178,14 +181,16 @@ function App(): React.JSX.Element {
     setLoadError("");
     const request = (async () => {
       try {
-        const result = await api<{ fixtures: Fixture[]; warnings?: string[] }>(`/api/fixtures${force ? "?refresh=1" : ""}`);
+        const result = await api<{ fixtures: Fixture[]; warnings?: string[]; stale?: boolean }>(`/api/fixtures${force ? "?refresh=1" : ""}`);
         setFixtures(result.fixtures);
         setProviderWarnings(result.warnings ?? []);
+        setFeedStale(result.stale ?? false);
         setFeedConnected(true);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Could not load fixtures.");
         setProviderWarnings([]);
         setFixtures([]);
+        setFeedStale(false);
         setFeedConnected(false);
       } finally {
         setLoadingFixtures(false);
@@ -240,7 +245,9 @@ function App(): React.JSX.Element {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const upcoming = fixtures.filter((fixture) => fixture.status === "scheduled");
+  const upcoming = fixtures.filter((fixture) =>
+    fixture.status === "scheduled" && Date.parse(fixture.startsAt) > Date.now(),
+  );
   const matchingUpcoming = upcoming.filter((fixture) => {
     const matchesSport = sportFilter === "all" || fixture.sport === sportFilter;
     const haystack = `${fixture.homeTeam} ${fixture.awayTeam} ${fixture.league}`.toLocaleLowerCase();
@@ -277,6 +284,10 @@ function App(): React.JSX.Element {
         }),
       });
       setGeneratedSlip(result);
+      if (result.stale) {
+        setFeedStale(true);
+        setProviderWarnings((warnings) => [...new Set([...warnings, result.warning ?? "Saved provider data is being used for preview only."])]);
+      }
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : "Could not generate selections.");
     } finally {
@@ -324,14 +335,14 @@ function App(): React.JSX.Element {
           <a className={`nav-link ${page === "history" ? "active" : ""}`} href="#history"><span className="nav-icon">↺</span>History <span className="nav-count">{tickets.length}</span></a>
         </nav>
         <div className="sidebar-bottom">
-          <div className={`sidebar-live${feedConnected ? " feed-connected" : ""}`}><span className="live-dot" /><span>{feedConnected ? "Football feed connected" : "Feed not connected"}</span></div>
+          <div className={`sidebar-live${feedConnected && !feedStale ? " feed-connected" : ""}`}><span className="live-dot" /><span>{feedStale ? "Showing saved prices" : feedConnected ? "Football feed connected" : "Feed not connected"}</span></div>
           <div className="sidebar-footnote">Football odds · API-Sports</div>
         </div>
       </aside>
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><span className="crumb-slash">/</span><strong>{titleByPage[page]}</strong></div>
-          <div className="topbar-right"><span className="date-chip">{formatDate(new Date(), { weekday: "short", month: "short", day: "numeric" }).toUpperCase()}</span><span className={`feed-chip${feedConnected ? " connected" : ""}`}><span className="live-dot" />{feedConnected ? "Feed online" : "Feed offline"}</span></div>
+          <div className="topbar-right"><span className="date-chip">{formatDate(new Date(), { weekday: "short", month: "short", day: "numeric" }).toUpperCase()}</span><span className={`feed-chip${feedConnected && !feedStale ? " connected" : ""}`}><span className="live-dot" />{feedStale ? "Saved data" : feedConnected ? "Feed online" : "Feed offline"}</span></div>
         </header>
         <div className="info-notice provider-notice">
           <span className="notice-icon">i</span>
@@ -397,11 +408,11 @@ function App(): React.JSX.Element {
                 {generationError && <div className="feed-stale-notice" role="alert">{generationError}</div>}
                 {loadError && !feedConnected && <div className="feed-stale-notice">{loadError}</div>}
                 {providerWarnings.map((warning) => <div className="feed-stale-notice" key={warning}>{warning}</div>)}
-                <div className="strategy-note">One pick per game, balanced across leagues and available markets. Totals and spreads are included where listed; this feed does not provide corners, shots, or fouls. These odds are not predictions.</div>
+                <div className="strategy-note">One pick per game, balanced across leagues and available markets. Totals, spreads, corners, and cards are included where listed. These odds are not predictions.</div>
                 <button className="button button-primary button-wide" type="submit" disabled={generatingSlip}>
                   {generatingSlip ? "Building from current markets…" : <>Generate selections <span>→</span></>}
                 </button>
-                <div className="form-footnote"><span className="live-dot" /> Preview prices refresh live; availability is checked before saving</div>
+                <div className="form-footnote"><span className="live-dot" /> Prices are checked with the provider before saving</div>
                 {generatedSlip && (
                   <GeneratedSlipPreview
                     slip={generatedSlip}
@@ -557,7 +568,7 @@ function GeneratedSlipPreview({ slip, saving, saved, onSave }: {
   return (
     <section className="generated-preview" aria-live="polite">
       <div className="preview-heading">
-        <div><div className="eyebrow">GENERATED FROM LIVE MARKETS</div><h3>{slip.period === "daily" ? "Daily" : "Weekend"} · {sportLabel} · {slip.picks.length} {slip.picks.length === 1 ? "selection" : "selections"}</h3></div>
+        <div><div className="eyebrow">{slip.stale ? "SAVED PROVIDER SNAPSHOT · PREVIEW ONLY" : "GENERATED FROM LIVE MARKETS"}</div><h3>{slip.period === "daily" ? "Daily" : "Weekend"} · {sportLabel} · {slip.picks.length} {slip.picks.length === 1 ? "selection" : "selections"}</h3></div>
         <div className="preview-total"><strong>{formatOdds(slip.combinedOdds)}</strong><span>COMBINED ODDS</span></div>
       </div>
       <div className="preview-window">{formatDate(slip.window.startsAt, { month: "short", day: "numeric" })} – {formatDate(new Date(new Date(slip.window.endsAt).getTime() - 1), { month: "short", day: "numeric" })}</div>
@@ -566,6 +577,7 @@ function GeneratedSlipPreview({ slip, saving, saved, onSave }: {
           ? `Target ${slip.targetOdds.toFixed(2)} reached`
           : `Target ${slip.targetOdds.toFixed(2)} not reached with the available fixtures`}
       </div>
+      {slip.warning && <div className="feed-stale-notice" role="status">{slip.warning}</div>}
       <div className="preview-picks">
         {slip.picks.map(({ fixture, selection }) => (
           <article className="preview-pick" key={fixture.id}>
@@ -578,8 +590,8 @@ function GeneratedSlipPreview({ slip, saving, saved, onSave }: {
         ))}
       </div>
       <p className="preview-disclaimer">{slip.method}</p>
-      <button className="button button-primary button-wide" type="button" onClick={onSave} disabled={saving || saved || slip.picks.length === 0}>
-        {saved ? "Saved to history" : saving ? "Checking prices and saving…" : "Save this slip to history"}
+      <button className="button button-primary button-wide" type="button" onClick={onSave} disabled={saving || saved || slip.stale === true || slip.picks.length === 0}>
+        {saved ? "Saved to history" : slip.stale ? "Saving unavailable until live prices return" : saving ? "Checking prices and saving…" : "Save this slip to history"}
       </button>
     </section>
   );

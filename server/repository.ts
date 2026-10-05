@@ -113,23 +113,28 @@ export async function syncFixtures(database: Database, fixtures: Fixture[]): Pro
   }
 }
 
-export async function listFixtures(database: Database): Promise<Fixture[]> {
+export async function listFixtures(database: Database, updatedSince?: Date): Promise<Fixture[]> {
+  const freshnessFilter = updatedSince ? "AND ms.updated_at >= $1" : "";
   const { rows: fixtures } = await database.query<FixtureRow>(
     `SELECT DISTINCT f.id, f.source, f.sport, f.home_team, f.away_team, f.league, f.starts_at, f.status, f.updated_at
      FROM fixtures f
      JOIN market_selections ms ON ms.fixture_id = f.id AND ms.active = TRUE
      WHERE f.source IN ('sportradar', 'the-odds-api', 'api-sports')
        AND f.starts_at >= NOW() - INTERVAL '48 hours'
+       ${freshnessFilter}
      ORDER BY f.starts_at`,
+    updatedSince ? [updatedSince] : [],
   );
   const result: Fixture[] = [];
   for (const row of fixtures) {
     const { rows: markets } = await database.query<MarketRow>(
       `SELECT id, fixture_id, market, selection, odds, bookmaker,
               market_bookmaker, market_probability, updated_at
-       FROM market_selections WHERE fixture_id = $1 AND active = TRUE
+       FROM market_selections
+       WHERE fixture_id = $1 AND active = TRUE
+         ${updatedSince ? "AND updated_at >= $2" : ""}
        ORDER BY selection`,
-      [row.id],
+      updatedSince ? [row.id, updatedSince] : [row.id],
     );
     result.push({
       id: row.id,

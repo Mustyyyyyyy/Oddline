@@ -61,10 +61,10 @@ export class ApiSportsFootballFeed implements OddsFeed {
     private readonly cacheSeconds = providerCacheSeconds(),
   ) {}
 
-  async getFixtures(_forceRefresh = false): Promise<Fixture[]> {
-    if (this.fixturesCache && this.fixturesCache.expiresAt > Date.now()) return this.fixturesCache.fixtures;
+  async getFixtures(forceRefresh = false): Promise<Fixture[]> {
+    if (!forceRefresh && this.fixturesCache && this.fixturesCache.expiresAt > Date.now()) return this.fixturesCache.fixtures;
     if (!this.fixturesRefresh) {
-      this.fixturesRefresh = this.fetchFixtureRange()
+      this.fixturesRefresh = this.fetchFixtureRange(forceRefresh)
         .then((fixtures) => {
           this.fixturesCache = { fixtures, expiresAt: Date.now() + this.cacheSeconds * 1000 };
           return fixtures;
@@ -100,13 +100,13 @@ export class ApiSportsFootballFeed implements OddsFeed {
     return [...this.warnings];
   }
 
-  private async fetchFixtureRange(): Promise<Fixture[]> {
+  private async fetchFixtureRange(forceRefresh = false): Promise<Fixture[]> {
     const dates = dateRange(this.now(), this.config.daysAhead);
     this.oddsTruncatedDates.clear();
     const results = await mapConcurrent(dates, 2, async (date) => {
       try {
         const [schedules, odds] = await Promise.all([
-          this.getDateFixtures(date),
+          this.getDateFixtures(date, forceRefresh),
           this.getDateOdds(date),
         ]);
         const schedulesById = new Map(schedules.map((fixture) => [fixture.id, fixture]));

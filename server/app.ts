@@ -56,12 +56,12 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
   }));
 
   app.get("/api/fixtures", asyncRoute(async (request, response) => {
-    const fixtures = await feed.getFixtures(request.query.refresh === "1");
-    await syncFixtures(database, fixtures);
+    const snapshot = await getFixtureSnapshot(database, feed, request.query.refresh === "1");
     response.json({
-      fixtures: await listFixtures(database),
+      fixtures: snapshot.fixtures,
       source: provider,
-      warnings: feed.getWarnings?.() ?? [],
+      stale: snapshot.stale,
+      warnings: [...(feed.getWarnings?.() ?? []), ...(snapshot.warning ? [snapshot.warning] : [])],
     });
   }));
 
@@ -99,10 +99,9 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
       response.status(400).json({ error: `${parsed.data.period === "daily" ? "Daily" : "Weekend"} target odds cannot exceed ${maximum}.` });
       return;
     }
-    const currentFixtures = await feed.getFixtures(true);
-    await syncFixtures(database, currentFixtures);
+    const snapshot = await getFixtureSnapshot(database, feed, false);
     const slip = generateSlip(
-      currentFixtures,
+      snapshot.fixtures,
       parsed.data.sport,
       parsed.data.period,
       parsed.data.targetOdds,
@@ -115,6 +114,8 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
     response.json({
       ...slip,
       source: provider,
+      stale: snapshot.stale,
+      warning: snapshot.warning,
       method: "One selection per game, balanced across available leagues and match-result, totals, and spread markets; market-implied odds are not independent forecasts.",
     });
   }));
@@ -130,8 +131,14 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
       response.status(400).json({ error: `${parsed.data.period === "daily" ? "Daily" : "Weekend"} target odds cannot exceed ${maximum}.` });
       return;
     }
-    const currentFixtures = await feed.getFixtures();
-    await syncFixtures(database, currentFixtures);
+    const snapshot = await getFixtureSnapshot(database, feed, false);
+    if (snapshot.stale) {
+      response.status(503).json({
+        error: snapshot.warning ?? "Live prices are unavailable; this saved snapshot is preview-only.",
+        source: provider,
+      });
+      return;
+    }
     try {
       const ticket = await saveTicket(
         database,
@@ -201,6 +208,45 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
   };
   app.use(errorHandler);
   return app;
+}
+
+const staleFixtureMaxAgeMs = 24 * 60 * 60 * 1000;
+
+async function getFixtureSnapshot(
+  database: Database,
+  feed: OddsFeed,
+  forceRefresh: boolean,
+): Promise<{ fixtures: Fixture[]; stale: boolean; warning?: string }> {
+  const cachedFixtures = (await listFixtures(database, new Date(Date.now() - sharedFixtureCacheMaxAgeMs())))
+    .filter((fixture) => fixture.source === (feed.source ?? "the-odds-api"));
+  if (!forceRefresh && cachedFixtures.length) {
+    return { fixtures: cachedFixtures, stale: false };
+  }
+
+  try {
+    const fixtures = await feed.getFixtures(forceRefresh);
+    await syncFixtures(database, fixtures);
+    return {
+      fixtures: (await listFixtures(database))
+        .filter((fixture) => fixture.source === (feed.source ?? "the-odds-api")),
+      stale: false,
+    };
+  } catch (error) {
+    if (!(error instanceof ProviderError)) throw error;
+    const fallbackFixtures = (await listFixtures(database, new Date(Date.now() - staleFixtureMaxAgeMs)))
+      .filter((fixture) => fixture.source === (feed.source ?? "the-odds-api"));
+    if (!fallbackFixtures.length) throw error;
+    return {
+      fixtures: fallbackFixtures,
+      stale: true,
+      warning: `Live ${feed.source ?? "sports"} prices are unavailable. Showing saved provider data from the last 24 hours for preview only; saving is disabled until live prices return. ${error.message}`,
+    };
+  }
+}
+
+function sharedFixtureCacheMaxAgeMs(): number {
+  const cacheSeconds = Number(process.env.SPORTS_FEED_CACHE_SECONDS ?? 21_600);
+  return Math.max(300, Number.isFinite(cacheSeconds) ? cacheSeconds : 21_600) * 1000;
 }
 
 function asyncRoute(
