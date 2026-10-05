@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "../web/styles.css";
 
@@ -117,10 +117,19 @@ function statusLabel(status: EventStatus | Ticket["status"]): string {
 }
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...options?.headers },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      signal: options?.signal ?? AbortSignal.timeout(45_000),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error("The data service took too long to respond. Please refresh and try again.");
+    }
+    throw new Error("Could not reach the data service. Check your connection and try again.");
+  }
   const isJson = response.headers.get("content-type")?.includes("application/json") ?? false;
   let data: unknown;
   if (isJson) {
@@ -161,22 +170,32 @@ function App(): React.JSX.Element {
   const [saving, setSaving] = useState(false);
   const [generated, setGenerated] = useState<Ticket | null>(null);
   const [notice, setNotice] = useState("");
+  const fixtureRequest = useRef<Promise<void> | null>(null);
 
   const loadFixtures = useCallback(async (force = false) => {
+    if (fixtureRequest.current) return fixtureRequest.current;
     setLoadingFixtures(true);
     setLoadError("");
+    const request = (async () => {
+      try {
+        const result = await api<{ fixtures: Fixture[]; warnings?: string[] }>(`/api/fixtures${force ? "?refresh=1" : ""}`);
+        setFixtures(result.fixtures);
+        setProviderWarnings(result.warnings ?? []);
+        setFeedConnected(true);
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : "Could not load fixtures.");
+        setProviderWarnings([]);
+        setFixtures([]);
+        setFeedConnected(false);
+      } finally {
+        setLoadingFixtures(false);
+      }
+    })();
+    fixtureRequest.current = request;
     try {
-      const result = await api<{ fixtures: Fixture[]; warnings?: string[] }>(`/api/fixtures${force ? "?refresh=1" : ""}`);
-      setFixtures(result.fixtures);
-      setProviderWarnings(result.warnings ?? []);
-      setFeedConnected(true);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load fixtures.");
-      setProviderWarnings([]);
-      setFixtures([]);
-      setFeedConnected(false);
+      await request;
     } finally {
-      setLoadingFixtures(false);
+      if (fixtureRequest.current === request) fixtureRequest.current = null;
     }
   }, []);
 
@@ -379,7 +398,7 @@ function App(): React.JSX.Element {
                 {loadError && !feedConnected && <div className="feed-stale-notice">{loadError}</div>}
                 {providerWarnings.map((warning) => <div className="feed-stale-notice" key={warning}>{warning}</div>)}
                 <div className="strategy-note">One pick per game, balanced across leagues and available markets. Totals and spreads are included where listed; this feed does not provide corners, shots, or fouls. These odds are not predictions.</div>
-                <button className="button button-primary button-wide" type="submit" disabled={generatingSlip || loadingFixtures}>
+                <button className="button button-primary button-wide" type="submit" disabled={generatingSlip}>
                   {generatingSlip ? "Building from current markets…" : <>Generate selections <span>→</span></>}
                 </button>
                 <div className="form-footnote"><span className="live-dot" /> Preview prices refresh live; availability is checked before saving</div>
