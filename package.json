@@ -12,7 +12,7 @@
     "build": "tsc --noEmit && tsc -p tsconfig.server.json && vite build",
     "build:vercel": "node scripts/build-vercel.mjs",
     "start": "node dist-server/server.js",
-    "test": "tsx --test server/odds-api.test.ts server/api-sports.test.ts server/app.test.ts server/generator.test.ts"
+    "test": "tsx --test server/odds-api.test.ts server/api-sports-feed.test.ts server/app.test.ts server/generator.test.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

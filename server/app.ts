@@ -163,9 +163,10 @@ export function createApp({ database, feed, staticDirectory, ready }: AppDepende
     response.json({
       ok: true,
       database: "available",
-      provider: process.env.ODDS_API_KEY ? "configured" : "not-configured",
-      scheduleProvider: process.env.API_SPORTS_KEY ? "configured" : "not-configured",
-      providerName: "API-Sports schedules + The Odds API prices",
+      provider: process.env.API_SPORTS_KEY ? "configured" : "not-configured",
+      providerName: "Oddline REST API: API-Sports Football fixtures and bookmaker odds",
+      supportedSports: ["football"],
+      unavailableSports: ["basketball"],
     });
   }));
 

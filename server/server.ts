@@ -6,9 +6,6 @@ import { createDatabase, migrate } from "./db.js";
 import { ProviderError } from "./errors.js";
 
 const production = process.env.NODE_ENV === "production";
-if (production && process.env.REQUIRE_LIVE_PROVIDER === "1" && !process.env.ODDS_API_KEY) {
-  throw new ProviderError("Configure ODDS_API_KEY before starting in production.");
-}
 if (production && process.env.REQUIRE_LIVE_PROVIDER === "1" && !process.env.API_SPORTS_KEY) {
   throw new ProviderError("Configure API_SPORTS_KEY before starting in production.");
 }

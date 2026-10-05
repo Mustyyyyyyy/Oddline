@@ -32,7 +32,7 @@ export interface Fixture {
   startsAt: string;
   status: EventStatus;
   selections: MarketSelection[];
-  source: "the-odds-api";
+  source: "the-odds-api" | "api-sports";
   oddsUpdatedAt: string;
 }
 

@@ -7,9 +7,6 @@ import { ProviderError } from "./server/errors.js";
 const database = createDatabase();
 let migrationPromise: Promise<void> | undefined;
 
-if (process.env.NODE_ENV === "production" && process.env.REQUIRE_LIVE_PROVIDER === "1" && !process.env.ODDS_API_KEY) {
-  throw new ProviderError("Configure ODDS_API_KEY before deploying the production app.");
-}
 if (process.env.NODE_ENV === "production" && process.env.REQUIRE_LIVE_PROVIDER === "1" && !process.env.API_SPORTS_KEY) {
   throw new ProviderError("Configure API_SPORTS_KEY before deploying the production app.");
 }

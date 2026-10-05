@@ -58,7 +58,7 @@ export async function syncFixtures(database: Database, fixtures: Fixture[]): Pro
     await client.query(
       `UPDATE fixtures
        SET status = 'unknown'
-       WHERE source IN ('sportradar', 'the-odds-api') AND starts_at < $1
+       WHERE source IN ('sportradar', 'the-odds-api', 'api-sports') AND starts_at < $1
          AND status NOT IN ('finished', 'postponed', 'cancelled', 'abandoned')`,
       [todayUtc],
     );
@@ -118,7 +118,7 @@ export async function listFixtures(database: Database): Promise<Fixture[]> {
     `SELECT DISTINCT f.id, f.source, f.sport, f.home_team, f.away_team, f.league, f.starts_at, f.status, f.updated_at
      FROM fixtures f
      JOIN market_selections ms ON ms.fixture_id = f.id AND ms.active = TRUE
-     WHERE f.source IN ('sportradar', 'the-odds-api')
+     WHERE f.source IN ('sportradar', 'the-odds-api', 'api-sports')
        AND f.starts_at >= NOW() - INTERVAL '48 hours'
      ORDER BY f.starts_at`,
   );

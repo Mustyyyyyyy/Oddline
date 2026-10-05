@@ -91,6 +91,10 @@ function marketLabel(market: string, sport: Fixture["sport"]): string {
   }
   if (type === "totals") return `${sport === "football" ? "Total goals" : "Total points"} (${line})`;
   if (type === "spreads") return `${sport === "football" ? "Handicap" : "Point spread"} (${line})`;
+  if (type === "corners") return `Total corners (${line})`;
+  if (type === "cards") return `Total cards (${line})`;
+  if (type === "btts") return "Both teams to score";
+  if (type === "first-half-result") return "First-half result";
   return market;
 }
 
@@ -301,8 +305,8 @@ function App(): React.JSX.Element {
           <a className={`nav-link ${page === "history" ? "active" : ""}`} href="#history"><span className="nav-icon">↺</span>History <span className="nav-count">{tickets.length}</span></a>
         </nav>
         <div className="sidebar-bottom">
-          <div className={`sidebar-live${feedConnected ? " feed-connected" : ""}`}><span className="live-dot" /><span>{feedConnected ? "Odds API connected" : "Feed not connected"}</span></div>
-          <div className="sidebar-footnote">Pre-match odds · The Odds API</div>
+          <div className={`sidebar-live${feedConnected ? " feed-connected" : ""}`}><span className="live-dot" /><span>{feedConnected ? "Football feed connected" : "Feed not connected"}</span></div>
+          <div className="sidebar-footnote">Football odds · API-Sports</div>
         </div>
       </aside>
       <main className="main-area">
@@ -312,13 +316,13 @@ function App(): React.JSX.Element {
         </header>
         <div className="info-notice provider-notice">
           <span className="notice-icon">i</span>
-          <span><strong>Odds feed, not a prediction:</strong> bookmaker prices and market-implied probabilities come from The Odds API. There is no validated independent forecasting model connected. No outcomes are recommended.</span>
+          <span><strong>Odds feed, not a prediction:</strong> bookmaker prices and market-implied probabilities come from API-Sports. NBA is disabled until current-season schedules and a real NBA odds source are available. No outcomes are recommended.</span>
         </div>
 
         {page === "home" && (
           <section className="page active">
             <div className="page-heading">
-              <div><div className="eyebrow">SPORTS DATA · PRE-MATCH</div><h1>Your sports desk</h1><p>Upcoming fixtures and bookmaker prices from The Odds API.</p></div>
+              <div><div className="eyebrow">FOOTBALL DATA · PRE-MATCH</div><h1>Your sports desk</h1><p>Upcoming football fixtures and available bookmaker prices from API-Sports.</p></div>
               <a className="button button-primary" href="#generate"><span>＋</span> Generate odds</a>
             </div>
             <div className="stats-grid">
@@ -426,7 +430,7 @@ function App(): React.JSX.Element {
             </div>
           </section>
         )}
-        <footer className="site-footer"><span>ODDLINE <span className="brand-period">·</span> SPORTS DATA WORKSPACE</span><span>The Odds API · Independent forecasts unavailable</span></footer>
+        <footer className="site-footer"><span>ODDLINE <span className="brand-period">·</span> SPORTS DATA WORKSPACE</span><span>API-Sports Football · Independent forecasts unavailable</span></footer>
       </main>
       {notice && <div className="toast show" role="status" aria-live="polite">{notice}</div>}
     </div>
@@ -464,8 +468,10 @@ function FixtureFilters({ sport, onSportChange, search, onSearchChange }: {
             key={option}
             aria-pressed={sport === option}
             onClick={() => onSportChange(option)}
+            disabled={option === "basketball"}
+            title={option === "basketball" ? "NBA is unavailable until a current-season schedule and real odds source are configured." : undefined}
           >
-            {option === "all" ? "All sports" : option === "football" ? "Soccer" : "Basketball"}
+            {option === "all" ? "All sports" : option === "football" ? "Soccer" : "NBA unavailable"}
           </button>
         ))}
       </div>
@@ -486,8 +492,10 @@ function SportSelector({ sport, onSportChange }: {
           key={option}
           aria-pressed={sport === option}
           onClick={() => onSportChange(option)}
+          disabled={option === "basketball"}
+          title={option === "basketball" ? "NBA is unavailable until a current-season schedule and real odds source are configured." : undefined}
         >
-          {option === "all" ? "All sports" : option === "football" ? "Soccer" : "Basketball"}
+          {option === "all" ? "All sports" : option === "football" ? "Soccer" : "NBA unavailable"}
         </button>
       ))}
     </div>
